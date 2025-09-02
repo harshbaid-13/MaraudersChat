@@ -1,0 +1,33 @@
+# Node
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+frontend/.env*
+backend/.env*
+
+# Build artifacts
+build/
+dist/
+*.tsbuildinfo
+
+# Next.js (frontend)
+frontend/.next/
+frontend/out/
+
+# Vercel (frontend)
+frontend/.vercel/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Misc
+*.pem
