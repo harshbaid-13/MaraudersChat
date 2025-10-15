@@ -1,0 +1,306 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==================== USER MANAGEMENT ====================
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique @db.VarChar(50)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  
+  // Profile
+  fullName     String?  @db.VarChar(100)
+  bio          String?  @db.Text
+  profilePic   String?  // Cloudinary URL
+  isOnline     Boolean  @default(false)
+  lastSeen     DateTime @default(now())
+  
+  // E2EE Support
+  publicKey    String?  @db.Text // For E2EE in 1-1 chats
+  
+  // Account metadata
+  isVerified   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  sentFriendRequests     FriendRequest[] @relation("SentRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedRequests")
+  friendships1           Friendship[]    @relation("User1Friends")
+  friendships2           Friendship[]    @relation("User2Friends")
+  conversations          ConversationMember[]
+  sentMessages           Message[]
+  readReceipts           MessageReceipt[]
+  typingIndicators       TypingIndicator[]
+  initiatedCalls         Call[]          @relation("CallInitiator")
+  callParticipations     CallParticipant[]
+  devices                Device[]        // For multi-device support
+  
+  @@index([username])
+  @@index([email])
+  @@index([isOnline, lastSeen])
+}
+
+model Device {
+  id           String   @id @default(uuid())
+  userId       String
+  deviceToken  String?  // For push notifications
+  deviceName   String
+  platform     String   // ios, android, web
+  lastActive   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// ==================== FRIEND SYSTEM ====================
+
+model FriendRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  message    String?  @db.Text // Optional request message
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@index([createdAt])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  user1Id   String
+  user2Id   String
+  createdAt DateTime @default(now())
+  
+  user1 User @relation("User1Friends", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("User2Friends", fields: [user2Id], references: [id], onDelete: Cascade)
+  
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+// ==================== CONVERSATION SYSTEM ====================
+
+model Conversation {
+  id          String           @id @default(uuid())
+  type        ConversationType
+  name        String?          @db.VarChar(255) // For groups
+  description String?          @db.Text         // For groups
+  avatar      String?          // Cloudinary URL for group avatar
+  isE2EE      Boolean          @default(false)  // True for 1-1 chats
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  members          ConversationMember[]
+  messages         Message[]
+  calls            Call[]
+  typingIndicators TypingIndicator[]
+  
+  @@index([type])
+  @@index([createdAt])
+}
+
+model ConversationMember {
+  id             String   @id @default(uuid())
+  conversationId String
+  userId         String
+  role           MemberRole @default(MEMBER)
+  nickname       String?  @db.VarChar(100) // User's nickname in this chat
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime @default(now())
+  isMuted        Boolean  @default(false)
+  muteUntil      DateTime?
+  
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@index([conversationId, joinedAt])
+}
+
+// ==================== MESSAGING SYSTEM ====================
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  senderId       String
+  
+  // Content
+  content        String      @db.Text // Encrypted for E2EE chats
+  type           MessageType @default(TEXT)
+  
+  // Reply/Forward
+  replyToId      String?
+  forwardedFrom  String?
+  
+  // Status
+  isEdited       Boolean     @default(false)
+  editedAt       DateTime?
+  isDeleted      Boolean     @default(false)
+  deletedAt      DateTime?
+  
+  createdAt      DateTime    @default(now())
+  
+  conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User            @relation(fields: [senderId], references: [id])
+  replyTo      Message?        @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies      Message[]       @relation("MessageReplies")
+  attachments  Attachment[]
+  receipts     MessageReceipt[]
+  
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId])
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  messageId  String
+  fileUrl    String   // Cloudinary URL
+  fileName   String   @db.VarChar(255)
+  fileType   String   @db.VarChar(50) // MIME type
+  fileSize   Int      // In bytes
+  thumbnail  String?  // For images/videos
+  duration   Int?     // For audio/video in seconds
+  createdAt  DateTime @default(now())
+  
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@index([messageId])
+}
+
+model MessageReceipt {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  status    ReceiptStatus
+  timestamp DateTime @default(now())
+  
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model TypingIndicator {
+  id             String   @id @default(uuid())
+  conversationId String
+  userId         String
+  startedAt      DateTime @default(now())
+  
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([conversationId, userId])
+}
+
+// ==================== CALL SYSTEM ====================
+
+model Call {
+  id             String   @id @default(uuid())
+  conversationId String?
+  initiatorId    String
+  type           CallType
+  status         CallStatus @default(INITIATED)
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  duration       Int?     // In seconds
+  recordingUrl   String?  // If call recording is enabled
+  
+  conversation Conversation?     @relation(fields: [conversationId], references: [id])
+  initiator    User              @relation("CallInitiator", fields: [initiatorId], references: [id])
+  participants CallParticipant[]
+  
+  @@index([conversationId])
+  @@index([initiatorId])
+  @@index([startedAt])
+}
+
+model CallParticipant {
+  id         String    @id @default(uuid())
+  callId     String
+  userId     String
+  joinedAt   DateTime  @default(now())
+  leftAt     DateTime?
+  isMuted    Boolean   @default(false)
+  isVideoOn  Boolean   @default(true)
+  
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([callId, userId])
+  @@index([userId])
+}
+
+// ==================== ENUMS ====================
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum ConversationType {
+  ONE_TO_ONE
+  GROUP
+  CHANNEL    // For broadcast-style groups
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  CONTACT
+  STICKER
+  GIF
+  SYSTEM     // For join/leave messages
+}
+
+enum ReceiptStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum CallType {
+  VOICE
+  VIDEO
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  ONGOING
+  COMPLETED
+  MISSED
+  DECLINED
+  FAILED
+}
