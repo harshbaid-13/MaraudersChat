@@ -4,6 +4,7 @@ import path from 'path';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { errorHandler, notFound } from './middleware/error';
+import authRoutes from './routes/auth.routes';
 
 const app: Application = express();
 
@@ -15,12 +16,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.ico')));
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
     res.json({ status: 'ok', message: 'Server is running' });
 });
 
-// Routes (we'll add these next)
-// app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 // Error handling
 app.use(notFound);
