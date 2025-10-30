@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Check for backend changes
+if git diff --cached --name-only | grep "^backend/" > /dev/null; then
+  echo "🔍 Linting backend..."
+  cd backend && npx lint-staged --relative
+fi
+
+# Check for frontend changes
+if git diff --cached --name-only | grep "^frontend/" > /dev/null; then
+  echo "🔍 Linting frontend..."
+  cd frontend && npx lint-staged --relative
+fi

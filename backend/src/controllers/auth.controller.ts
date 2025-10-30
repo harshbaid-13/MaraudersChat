@@ -42,7 +42,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         const result = await authService.refreshAccessToken(refreshToken);
 
         successResponse(res, result, 'Token refreshed', 200);
-    } catch (error: any) {
+    } catch {
         errorResponse(res, 'Invalid refresh token', 401);
     }
 };
