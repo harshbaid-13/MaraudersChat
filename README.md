@@ -1,181 +1,103 @@
-# Marauder’s Chat
+# Marauder's Chat
 
 **Secure Real-time Messaging & Gaming Platform**
 
-A real-time end-to-end encrypted chat platform with text, stickers, voice notes (Howlers), voice/video calls (P2P), scheduled messages, anonymous groups, command-based interactions, and interactive multiplayer games inside the chat UI. Communication is secured with RSA over WebSockets and media is optimized P2P via WebRTC.
+A real-time end-to-end encrypted chat platform with text, stickers, voice notes (Howlers), voice/video calls (P2P), scheduled messages, anonymous groups, command-based interactions, and interactive multiplayer games inside the chat UI.
 
 ---
 
-## Highlights / Features
+## Tech Stack
 
-* Real-time E2E encrypted messaging: text, stickers, media, voice notes (Howlers).
-* P2P voice & video calls via WebRTC; optimized peer connections and selective forwarding.
-* Unique features: auto-play voice notes (Howlers), anonymous group messaging, scheduled/delayed delivery.
-* Command system: slash commands, AI bot responses, and multiplayer game commands embedded inside chats.
-* Secure signaling: RSA-based message signing/encryption over WebSockets; optional TURN for NAT traversal.
-
----
-
-## Tech stack
-
-* Backend: **Node.js**, **Express.js**, WebSockets (ws / socket.io-style), WebRTC signaling
-* Frontend: **React** (client SPA)
-* Database: **MongoDB** (user/room/message store)
-* Crypto: **RSA** for key exchange & signatures; optional libs like `node-forge` / `crypto`
-* Optional: **Redis** (presence / pubsub), **Docker / docker-compose**
+- **Backend:** Node.js, Express, TypeScript, Prisma ORM
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS 4
+- **Database:** PostgreSQL
+- **Auth:** JWT (access + refresh tokens)
+- **Tooling:** ESLint, Prettier, Husky, lint-staged
 
 ---
 
-## Architecture overview
-
-* `client/` (React): UI, local key storage (private key per device in secure storage), WebRTC handling, and command/game UI.
-* `backend/` (Node): REST API, WebSocket signaling server, RSA crypto helpers, message scheduler, bot/command engine, media relay support (TURN interfacing).
-* Peer connections: Signaling over WebSocket -> direct/mesh WebRTC connections for media -> fallback to TURN when required.
-* Data persistency: MongoDB for messages, profiles, scheduled jobs; Redis for presence/locks/queues (optional).
-
----
-
-## Quickstart — install & run (all commands)
-
-*Assumes project root has `backend/` and `client/` subfolders. Adjust scripts according to your repo.*
+## Quickstart
 
 ### Prerequisites
 
-* Node.js (>= 16 recommended) and npm or yarn
-* MongoDB running (or a MongoDB URI)
-* Redis
+- Node.js >= 18
+- PostgreSQL running locally or remote instance
+- Git
 
-### Clone & install
+### Clone & Install
 
 ```bash
 git clone https://github.com/Keshav76/Marauders-Chat.git
-cd marauders-chat
+cd MaraudersChat
 
-# Backend
+# Install root dependencies (Husky)
+npm ci
+
+# Install backend & frontend
+npm --prefix backend ci
+npm --prefix frontend ci
+```
+
+### Environment Setup
+
+**Backend** — create `backend/.env`:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/marauders_chat"
+JWT_SECRET="your-secret-key"
+JWT_REFRESH_SECRET="your-refresh-secret"
+JWT_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+PORT=5000
+```
+
+**Frontend** — create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+### Database Setup
+
+```bash
 cd backend
-npm install
-
-# Frontend
-cd ../client
-npm install
-```
----
-
-## File structure (recommended)
-
-```
-marauders-chat/
-├── README.md
-├── docker-compose.yml
-├── .env.example
-├── backend/
-│   ├── package.json
-│   ├── src/
-│   │   ├── index.js                # entry: express + websocket server
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   │   ├── crypto/             # RSA helpers, key management
-│   │   │   ├── signaling/          # WebSocket events & handlers
-│   │   │   ├── webrtc/             # ICE/offer/answer helpers
-│   │   │   ├── scheduler/          # scheduled message delivery
-│   │   │   └── bot/                # command & AI-bot integration
-│   │   ├── models/                 # mongoose models (User, Room, Message)
-│   │   ├── jobs/                   # cron / queue processors
-│   │   └── tests/
-│   └── keys/
-├── client/
-│   ├── package.json
-│   ├── public/
-│   └── src/
-│       ├── index.jsx
-│       ├── App.jsx
-│       ├── components/
-│       ├── views/
-│       ├── services/               # api, ws, webrtc wrappers
-│       ├── hooks/                  # useWebRTC, useHowlerAutoPlay
-│       └── styles/
-└── infra/                          # optional infra: terraform, k8s, nginx configs
+npx prisma generate
+npx prisma migrate dev --name init
 ```
 
----
-
-## WebSocket events & REST endpoints (summary)
-
-### Common REST endpoints
-
-```
-POST   /api/auth/login
-POST   /api/auth/register
-GET    /api/users/:id
-GET    /api/rooms
-POST   /api/rooms
-GET    /api/rooms/:roomId/messages?limit=...
-POST   /api/rooms/:roomId/messages   # for non-real-time message creation (fallback)
-POST   /api/commands/execute
-POST   /api/schedule                 # schedule a message
-```
-
-### WebSocket / Signaling events (examples)
-
-* `auth` — authenticate socket connection (JWT + device id).
-* `presence` — user online/offline updates.
-* `offer` / `answer` / `ice-candidate` — WebRTC signaling.
-* `message` — real-time chat message (E2E encrypted payload).
-* `message:ack` — delivery/read acknowledgements.
-* `command` — run slash command (e.g., `/roll`, `/game start`).
-* `howler:auto-play` — howler voice-note auto-play control.
-* `schedule:create` / `schedule:execute` — scheduling-related events.
-* `room:anonymous-join` — anonymous group interactions.
-
-(Implement specific event names to suit your codebase.)
-
----
-
-## Testing / lint / format / docker commands
-
-Assumed npm scripts (adapt if you use yarn or pnpm):
-
-### Backend scripts (run from `backend/`)
+### Run Dev Servers
 
 ```bash
-npm run dev          # start dev server with nodemon / ts-node-dev
-npm run start        # start production (node dist/)
-npm run build        # transpile (if TypeScript)
-npm run test         # run unit tests (jest/mocha)
-npm run lint         # eslint
-npm run format       # prettier
-npm run seed         # seed DB with sample data (for dev)
-npm run migrate      # apply DB migrations (if used)
+# Terminal 1: Backend
+npm run dev:backend
+
+# Terminal 2: Frontend
+npm run dev:frontend
 ```
 
-### Frontend scripts (run from `client/`)
-
-```bash
-npm run start        # react dev server
-npm run build        # production build
-npm run preview      # serve build locally (optional)
-npm run test         # jest / react-scripts test
-npm run lint
-npm run format
-```
+- Backend: `http://localhost:5000`
+- Frontend: `http://localhost:3000`
 
 ---
 
-## Acknowledgements & references
+## Development Workflow
 
-* Built-inspired-by modern encrypted chat and WebRTC signaling patterns.
-* Use libraries such as `ws`/`socket.io`, `simple-peer` / native RTCPeerConnection clients for WebRTC, `mongoose` for MongoDB, and Node’s `crypto` or `node-forge` for RSA helpers.
+- **Lint:** `npm run lint:backend` / `npm run lint:frontend`
+- **Format:** `npm run format:backend` / `npm run format:frontend`
+- **Build:** `npm --prefix backend run build` / `npm --prefix frontend run build`
+- **Prisma Studio:** `npm --prefix backend run prisma:studio`
+
+Pre-commit hooks automatically lint and format staged files.
+
+---
+
+## Documentation
+
+- [API Documentation](./docs/API_DOCUMENTATION.md) — REST endpoints & request/response formats
+- [Implementation Summary](./docs/IMPLEMENTATION_SUMMARY.md) — Current development status
 
 ---
 
 ## License
 
 MIT — see `LICENSE` file.
-
----
-* generate a ready-to-copy `.env.example`, `docker-compose.yml` skeleton, and `package.json` scripts tailored to your repo layout; or
-* write a short CONTRIBUTING.md or a sample `docker-compose.yml` with Mongo & coturn.
-
-Which of those would you like me to add right now? (I can produce them immediately.)
